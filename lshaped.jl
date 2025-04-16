@@ -59,7 +59,10 @@ function solve_subproblem(b1_bar, eta1, xi1, p_w)
     optimize!(m)
 
     return (obj = objective_value(m),
-            π = dual(c_link))
+            π = dual(c_link), 
+            b2 = value.(b2),
+            eta2 = value.(eta2),
+            xi2 = value.(xi2))
 end
 
 
@@ -70,6 +73,7 @@ function lshaped(p_avg, p_ws, prob_ws, θ_init)
 
     LBs = []
     UBs = []
+    sub_ret = nothing
 
     # Create main model and variables
     main_model, b1, eta1, xi1, θ = main_problem_lshaped(p_avg, θ_init)
@@ -82,7 +86,7 @@ function lshaped(p_avg, p_ws, prob_ws, θ_init)
             error("Main problem not solved to optimality at iteration $k")
         end
 
-        lb = objective_value(main_model)
+        ub = objective_value(main_model)
 
         # Extract first-stage solution
         b1_k = value.(b1)
@@ -94,7 +98,7 @@ function lshaped(p_avg, p_ws, prob_ws, θ_init)
             solve_subproblem(b1_k, eta1_k, xi1_k, p_ws[l]) for l in eachindex(p_ws)
         ]
 
-        ub = (objective_value(main_model) - value(θ)) + sum(prob_ws[i] * sub_ret[i].obj for i in eachindex(prob_ws))
+        lb = (objective_value(main_model) - value(θ)) + sum(prob_ws[i] * sub_ret[i].obj for i in eachindex(prob_ws))
         gap = abs(ub - lb) / abs(ub)
 
         push!(LBs, lb)
@@ -117,7 +121,7 @@ function lshaped(p_avg, p_ws, prob_ws, θ_init)
 
     end
     
-    return LBs, UBs
+    return (lb = LBs, ub = UBs, b1 = value.(b1), eta1 = value.(eta1), xi1 = value.(xi1), b2 = [sub_ret[i].b2 for i in eachindex(prob_ws)], eta2 = [sub_ret[i].eta2 for i in eachindex(prob_ws)], xi2 = [sub_ret[i].xi2 for i in eachindex(prob_ws)])
 end
 
 
@@ -128,6 +132,7 @@ function multicut_lshaped(p_avg, p_ws, prob_ws, θ_init)
 
     LBs = []
     UBs = []
+    sub_ret = nothing
 
     # Create main model and variables
     main_model, b1, eta1, xi1, θ = main_problem_mc(p_avg, prob_ws, θ_init)
@@ -141,7 +146,7 @@ function multicut_lshaped(p_avg, p_ws, prob_ws, θ_init)
             error("Main problem not solved to optimality at iteration $k")
         end
 
-        lb = objective_value(main_model)
+        ub = objective_value(main_model)
 
         # Extract first-stage solution
         b1_k = value.(b1)
@@ -153,7 +158,7 @@ function multicut_lshaped(p_avg, p_ws, prob_ws, θ_init)
             solve_subproblem(b1_k, eta1_k, xi1_k, p_ws[l]) for l in eachindex(p_ws)
         ]
 
-        ub = (objective_value(main_model) - sum(value.(θ) .* prob_ws)) + sum(prob_ws[i] * sub_ret[i].obj for i in eachindex(prob_ws))
+        lb = (objective_value(main_model) - sum(value.(θ) .* prob_ws)) + sum(prob_ws[i] * sub_ret[i].obj for i in eachindex(prob_ws))
         gap = abs(ub - lb) / abs(ub)
 
         push!(LBs, lb)
@@ -172,6 +177,6 @@ function multicut_lshaped(p_avg, p_ws, prob_ws, θ_init)
 
     end
     
-    return LBs, UBs
+    return (lb = LBs, ub = UBs, b1 = value.(b1), eta1 = value.(eta1), xi1 = value.(xi1), b2 = [sub_ret[i].b2 for i in eachindex(prob_ws)], eta2 = [sub_ret[i].eta2 for i in eachindex(prob_ws)], xi2 = [sub_ret[i].xi2 for i in eachindex(prob_ws)])
     
 end
