@@ -10,11 +10,8 @@ function generate_scenarios(H, N)
     return [vcat(p, [s]) for p in prev for s in 1:N]
 end
 
-scenarios = generate_scenarios(H, N)
-num_scenarios = length(scenarios)
-
 # Build full trajectories (starting from known state 1 at t=1)
-function compute_price_path(scenario)
+function compute_price_path(scenario, λ_expected, markov_support, markov_transition)
     full_states = [1; scenario]  # root state fixed at 1
     λ_path = [λ_expected[t] * exp(markov_support[full_states[t]]) for t in 1:H]
     prob = 1.0
@@ -24,16 +21,10 @@ function compute_price_path(scenario)
     return λ_path, prob
 end
 
-λ_paths = Vector{Vector{Float64}}(undef, num_scenarios)
-probs = zeros(num_scenarios)
-for (i, s) in enumerate(scenarios)
-    λ_paths[i], probs[i] = compute_price_path(s)
-end
-
-function extended_multistage(λ_paths)
+function extended_multistage(λ_paths, H, num_scenarios)
     
     model = Model(Gurobi.Optimizer)
-
+    set_silent(model)
     @variable(model, 0 <= η[1:H, 1:num_scenarios] <= 200)
     @variable(model, 0 <= ξ[1:H, 1:num_scenarios] <= 200)
     @variable(model, 0 <= b[1:H+1, 1:num_scenarios] <= 800)

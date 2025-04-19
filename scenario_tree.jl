@@ -32,26 +32,28 @@ function build_tree(H, N, markov_support, markov_transition)
     return tree
 end
 
-tree = build_tree(H, N, markov_support, markov_transition)
+#tree = build_tree(H, N, markov_support, markov_transition)
 
-model = Model(Gurobi.Optimizer)
+function scenario_tree(markov_support,λ_expected,tree)
+    model = Model(Gurobi.Optimizer)
+    set_silent(model)
+    @variable(model, 0 <= η[n in keys(tree)] <= 200)
+    @variable(model, 0 <= ξ[n in keys(tree)] <= 200)
+    @variable(model, 0 <= b[n in keys(tree)] <= 800)
 
-@variable(model, 0 <= η[n in keys(tree)] <= P_max)
-@variable(model, 0 <= ξ[n in keys(tree)] <= P_max)
-@variable(model, 0 <= b[n in keys(tree)] <= E_max)
+    #@constraint(model, b[1] == 0)
 
-#@constraint(model, b[1] == 0)
-
-for n in values(tree)
-    if !isnothing(n.parent)
-        @constraint(model, b[n.id] == b[n.parent] + ξ[n.parent] - η[n.parent])
+    for n in values(tree)
+        if !isnothing(n.parent)
+            @constraint(model, b[n.id] == b[n.parent] + ξ[n.parent] - η[n.parent])
+        end
     end
+
+    λ = Dict(n.id => λ_expected[n.stage] * exp(markov_support[n.state]) for n in values(tree))
+
+    @objective(model, Max, sum(tree[n].prob * λ[n] * (0.9 * η[n] - 1/(0.9) * ξ[n]) for n in keys(tree)))
+
+    optimize!(model)
+
+    println("Objective value: ", objective_value(model))
 end
-
-λ = Dict(n.id => λ_expected[n.stage] * exp(markov_support[n.state]) for n in values(tree))
-
-@objective(model, Max, sum(tree[n].prob * λ[n] * (0.9 * η[n] - 1/(0.9) * ξ[n]) for n in keys(tree)))
-
-optimize!(model)
-
-println("Objective value: ", objective_value(model))
