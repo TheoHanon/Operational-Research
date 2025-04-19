@@ -12,11 +12,11 @@ function main_problem_lshaped(p_avg, θ_init)
 
     # Constraints
 
-    @constraint(m, [t in 2:length(p_avg)], b1[t] == b1[t-1] - eta1[t]/(0.9) + 0.9 * xi1[t])
+    @constraint(m, [t in 2:length(p_avg)], b1[t] == b1[t-1] - eta1[t] + xi1[t])
     # @constraint(m, b1[1] == 0)
     @constraint(m, θ <= θ_init)
 
-    @objective(m, Max, sum(p_avg[t] * (eta1[t] - xi1[t]) for t in eachindex(p_avg)) + θ)
+    @objective(m, Max, sum(p_avg[t] * (0.9*eta1[t] - 1/(0.9) * xi1[t]) for t in eachindex(p_avg)) + θ)
 
     return m, b1, eta1, xi1, θ
 end
@@ -32,9 +32,9 @@ function main_problem_mc(p_avg, prob_ws, θ_init)
     @variable(m, θ[eachindex(prob_ws)] <= θ_init)
 
     # Constraints
-    @constraint(m, [t in 2:length(p_avg)], b1[t] == b1[t-1] - eta1[t]/(0.9) + 0.9 * xi1[t])
+    @constraint(m, [t in 2:length(p_avg)], b1[t] == b1[t-1] - eta1[t] + xi1[t])
     
-    @objective(m, Max, sum(p_avg[t] * (eta1[t] - xi1[t]) for t in eachindex(p_avg)) + sum(θ .* prob_ws))
+    @objective(m, Max, sum(p_avg[t] * (0.9*eta1[t] - 1/(0.9) * xi1[t]) for t in eachindex(p_avg)) + sum(θ .* prob_ws))
 
     return m, b1, eta1, xi1, θ
 end
@@ -51,11 +51,11 @@ function solve_subproblem(b1_bar, eta1, xi1, p_w)
 
     # Constraints
     
-    @constraint(m, b2[1] == b1_end - eta2[1] / (0.9) + 0.9 * xi2[1])
-    @constraint(m, [t in 2:length(p_w)], b2[t] == b2[t-1] - eta2[t] / (0.9) + 0.9 * xi2[t])
+    @constraint(m, b2[1] == b1_end - eta2[1] + xi2[1])
+    @constraint(m, [t in 2:length(p_w)], b2[t] == b2[t-1] - eta2[t] + xi2[t])
     @constraint(m, c_link, b1_end == b1_bar[end])
     
-    @objective(m, Max, sum(p_w[t] * (0.9 * eta2[t] - xi2[t]) for t in eachindex(p_w)))
+    @objective(m, Max, sum(p_w[t] * (0.9 * eta2[t] - 1/(0.9) * xi2[t]) for t in eachindex(p_w)))
     optimize!(m)
 
     return (obj = objective_value(m),
