@@ -4,14 +4,14 @@ using Random
 
 function generate_scenarios(H, N)
     if H == 1
-        return [Int[]]
+        return [Int[1]]
     end
     prev = generate_scenarios(H - 1, N)
     return [vcat(p, [s]) for p in prev for s in 1:N]
 end
 
 # Build full trajectories (starting from known state 1 at t=1)
-function compute_price_path(scenario, λ_expected, markov_support, markov_transition)
+function compute_price_path(H,scenario, λ_expected, markov_support, markov_transition)
     full_states = [1; scenario]  # root state fixed at 1
     λ_path = [λ_expected[t] * exp(markov_support[full_states[t]]) for t in 1:H]
     prob = 1.0
@@ -35,9 +35,5 @@ function extended_multistage(λ_paths, H, num_scenarios)
         b[t+1, ω] == b[t, ω] + ξ[t, ω] - η[t, ω])
 
     @objective(model, Max, sum(probs[ω] * sum(λ_paths[ω][t] * (0.9*η[t, ω] - 1/(0.9) * ξ[t, ω]) for t in 1:H) for ω in 1:num_scenarios))
-
-    optimize!(model)
-
-    println("Objective value: ", objective_value(model))
-
+    return model
 end

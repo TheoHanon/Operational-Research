@@ -11,7 +11,7 @@ mutable struct Node
     state::Int
 end
 
-function build_tree(H, N, markov_support, markov_transition)
+function build_tree(H, N, markov_transition)
     tree = Dict{Int, Node}()
     tree[1] = Node(1, 1, nothing, 1.0, 1)  # Root node: state 1
 
@@ -32,7 +32,7 @@ function build_tree(H, N, markov_support, markov_transition)
     return tree
 end
 
-#tree = build_tree(H, N, markov_support, markov_transition)
+#tree = build_tree(H, N, markov_transition)
 
 function scenario_tree(markov_support,λ_expected,tree)
     model = Model(Gurobi.Optimizer)
@@ -52,8 +52,5 @@ function scenario_tree(markov_support,λ_expected,tree)
     λ = Dict(n.id => λ_expected[n.stage] * exp(markov_support[n.state]) for n in values(tree))
 
     @objective(model, Max, sum(tree[n].prob * λ[n] * (0.9 * η[n] - 1/(0.9) * ξ[n]) for n in keys(tree)))
-
-    optimize!(model)
-
-    println("Objective value: ", objective_value(model))
+    return model
 end
