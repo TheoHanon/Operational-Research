@@ -1,5 +1,4 @@
-using JuMP
-using Gurobi
+using JuMP, Gurobi
 using Random
 
 # Node definition
@@ -41,7 +40,7 @@ function scenario_tree(markov_support,λ_expected,tree)
     @variable(model, 0 <= ξ[n in keys(tree)] <= 200)
     @variable(model, 0 <= b[n in keys(tree)] <= 800)
 
-    #@constraint(model, b[1] == 0)
+    @constraint(model, b[1] == 0)
 
     for n in values(tree)
         if !isnothing(n.parent)

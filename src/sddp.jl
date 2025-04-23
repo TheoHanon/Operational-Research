@@ -1,20 +1,26 @@
-using SDDP
-using Gurobi
+using SDDP, Gurobi
 using Statistics
 
-function model_sddp(prices,states,P_prob)
-    env = Gurobi.Env()
+
+function model_sddp(prices, states, P_prob)
+
+    env = Gurobi.Env(output_flag = 0)
     N = length(states)
     T = length(prices)
 
-    ub = 24 * 200 * maximum(prices)
+    ub = 24 * 800 * maximum(prices)
 
-    root_transition = zeros(1, N)
-    root_transition[1] = 1.0
+    root = reshape(fill(1/N, N), 1, N)
 
     # Transition matrices: same across stages, first stage fixed at state 1
-    transition_matrices = vcat([reshape(root_transition, 1, N)], fill(P_prob, T - 1))
+    # transition_matrices = vcat([reshape(root_transition, 1, N)], fill(P_prob, T - 1))
+    transition_matrices = Vector{Matrix{Float64}}(undef, T)
 
+    transition_matrices[1] = root
+    for t in 2:T
+        transition_matrices[t] = P_prob
+    end
+    
     model = SDDP.MarkovianPolicyGraph(
         transition_matrices = transition_matrices,
         sense = :Max,
@@ -33,8 +39,8 @@ function model_sddp(prices,states,P_prob)
         @variable(subproblem, 0 <= b <= 800, SDDP.State, initial_value = 0.0)
 
         @constraint(subproblem, b.out == b.in + ξ - η)
-
         @stageobjective(subproblem, λ_t * (0.9 * η - (1 / 0.9) * ξ))
+    
     end
     return model
 end
