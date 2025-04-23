@@ -84,16 +84,39 @@ function compute_evpi(λ̄::Vector{Float64}, ζ::Vector{Float64}, P_prob::Matrix
     """ 
 
     T = length(λ̄)
+    N = length(ζ)
 
     # 1) Train SDDP policy
     m = model_sddp(λ̄, ζ, P_prob)
-    SDDP.train(m;time_limit=45, print_level=0)
+    SDDP.train(m;time_limit=15, print_level=0)
+
 
     # 2) Estimate SP:
+
+    sampling_scheme = SDDP.OutOfSampleMonteCarlo(m) do node
+        stage, markov_state = node          # root = (0, 0)
+    
+        if stage == 0
+            return [SDDP.Noise((1, s), 1 / N) for s in 1:N]
+    
+        elseif stage == T
+            children     = SDDP.Noise[]
+            noise_terms  = SDDP.Noise[]       # none in this model
+            return children, noise_terms
+    
+        else
+            
+            prob_row = P_prob[markov_state, :]      
+            children = [SDDP.Noise((stage + 1, s), p) for (s, p) in enumerate(prob_row)]
+            noise_terms = SDDP.Noise[]              # no stagewise-independent noise
+            return children, noise_terms
+        end
+    end
 
     sims_SP = SDDP.simulate(
         m,
         N_sim;
+        sampling_scheme = sampling_scheme,
     )
     profits_SP = [sum(stage[:stage_objective] for stage in sim)
                     for sim in sims_SP]
@@ -110,8 +133,6 @@ function compute_evpi(λ̄::Vector{Float64}, ζ::Vector{Float64}, P_prob::Matrix
 
     WS = mean(objs)
 
-    @show SP
-    @show WS
     @show WS - SP
 
     return WS - SP
