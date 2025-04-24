@@ -46,6 +46,11 @@ function scenario_tree(markov_support,λ_expected,tree)
         if !isnothing(n.parent)
             @constraint(model, b[n.id] == b[n.parent] + ξ[n.parent] - η[n.parent])
         end
+
+        isnleaf = !any(m -> m.parent == n.id, values(tree))
+        if isnleaf
+            @constraint(model, 0 <= b[n.id] + ξ[n.id] - η[n.id] <= 800)
+        end
     end
 
     λ = Dict(n.id => λ_expected[n.stage] * exp(markov_support[n.state]) for n in values(tree))

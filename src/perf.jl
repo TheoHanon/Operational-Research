@@ -4,8 +4,46 @@ include("utils.jl")
 using Statistics, Random
 
 
+# function make_sampling_scheme(m::SDDP.PolicyGraph, P_prob::Matrix{Float64})
+#     """
+#     Create a sampling scheme for the SDDP model.
 
-function compute_vss(λ̄::Vector{Float64}, ζ::Vector{Float64}, P_prob::Matrix{Float64}, N_sim::Int = 1_000)
+#     Parameters
+#     ----------
+#     m : SDDP.MarkovianPolicyGraph
+#         The SDDP model.
+#     P_prob : Matrix{Float64}
+#         Transition probabilities.
+
+#     Returns
+#     -------
+#     sampling_scheme : function
+#         The sampling scheme function.
+#     """
+
+#     T = length(P_prob)
+#     N = size(P_prob, 2)
+
+#     return SDDP.OutOfSampleMonteCarlo(m) do node
+#         stage, markov_state = node          # root = (0, 0)
+
+#         if stage == 0
+#             return SDDP.Noise((1, 1), 1.0)   # root state fixed at 1
+#         elseif stage == T
+#             children     = SDDP.Noise[]
+#             noise_terms  = SDDP.Noise[]       # none in this model
+#             return children, noise_terms
+#         else
+#             prob_row = P_prob[markov_state, :]      
+#             children = [SDDP.Noise((stage + 1, s), p) for (s, p) in enumerate(prob_row)]
+#             noise_terms = SDDP.Noise[]              # no stagewise-independent noise
+#             return children, noise_terms
+#         end
+#     end
+# end
+
+
+function compute_vss(λ̄::Vector{Float64}, ζ::Vector{Float64}, P_prob::Matrix{Float64}; N_sim::Int = 1_000)
     """
     Compute the value of the stochastic solution (VSS) for a given set of parameters.
 
@@ -26,42 +64,53 @@ function compute_vss(λ̄::Vector{Float64}, ζ::Vector{Float64}, P_prob::Matrix{
         Value of the stochastic solution.
     """
 
-    ############### 1) Train the multistage stochastic program ################
-    sp_model = model_sddp(λ̄, ζ, P_prob)
-    SDDP.train!(sp_model; iteration_limit = 250, print_level = 0)
-    sims_sp  = SDDP.simulate(sp_model, N_sim, [])   # no need to save vars
-    SP = mean(getfield.(sims_sp, :objective))
+    m = model_sddp(λ̄, ζ, P_prob)
+    SDDP.train(m; print_level=0)
+    # sampling_scheme = make_sampling_scheme(m, P_prob)
+
+
+    # 2) Estimate SP:
+
+
+    sims_SP = SDDP.simulate(
+        m,
+        N_sim;
+        # sampling_scheme = sampling_scheme,
+    )
+    
+    profits_SP = [sum(stage[:stage_objective] for stage in sim)
+                    for sim in sims_SP]
+    SP = mean(profits_SP)
+
 
     ############### 2) Solve the deterministic EVP ###########################
     det_ev_model = deterministic_model(λ̄)
     optimize!(det_ev_model)
-    b_var = det_ev_model[:b]
-    b_hat = value.(b_var)
+    η_fix = value.(det_ev_model[:η])
+    ξ_fix = value.(det_ev_model[:ξ])
 
     ############### 3) Evaluate EVP policy under uncertainty #################
     T = length(λ̄)
-    EEV_list = Vector{Float64}(undef, N_sim)
+    EEV = Float64[]
 
-    for n in 1:N_sim
-        ζ_path = sample_chain(T, P_prob, ζ)
-        price_path = λ̄ .* exp.(ζ_path)
-
-        # Build path‑specific deterministic model, but fix first‑stage variable
-        pol_model = deterministic_model(price_path)
-        # Assume :b is indexed 1:T
-        fix(pol_model[:b][1], b_hat[1]; force = true)  # first‑stage decision
-        optimize!(pol_model)
-        profits_policy[n] = objective_value(pol_model)
+    for t in 1:T
+        m_t = model_sddp(λ̄, ζ, P_prob; fix_ξ = ξ_fix[1:t], fix_η = η_fix[1:t])
+        SDDP.train(m_t; print_level=0)
+        # sampling_scheme = make_sampling_scheme(m_t, P_prob)
+        sims_policy = SDDP.simulate(
+            m_t,
+            N_sim;
+            # sampling_scheme = sampling_scheme,
+        )
+        push!(EEV, mean([sum(stage[:stage_objective] for stage in sim) for sim in sims_policy]))
     end
 
-    EEV = mean(profits_policy)
-
-    return EEV - SP   # maximise profit → VSS ≥ 0; flip sign if minimise/cost.
+    return SP .- EEV   # maximise profit → VSS ≥ 0; flip sign if minimise/cost.
 end
 
 
 
-function compute_evpi(λ̄::Vector{Float64}, ζ::Vector{Float64}, P_prob::Matrix{Float64}, N_sim::Int = 1_000)
+function compute_evpi(λ̄::Vector{Float64}, ζ::Vector{Float64}, P_prob::Matrix{Float64}; N_sim::Int = 1_000)
     """
     Compute the expected value of perfect information (EVPI) for a given set of parameters.
 
@@ -88,43 +137,22 @@ function compute_evpi(λ̄::Vector{Float64}, ζ::Vector{Float64}, P_prob::Matrix
 
     # 1) Train SDDP policy
     m = model_sddp(λ̄, ζ, P_prob)
-    SDDP.train(m;time_limit=15, print_level=0)
-
+    SDDP.train(m;print_level=0)
 
     # 2) Estimate SP:
 
-    sampling_scheme = SDDP.OutOfSampleMonteCarlo(m) do node
-        stage, markov_state = node          # root = (0, 0)
-    
-        if stage == 0
-            return [SDDP.Noise((1, s), 1 / N) for s in 1:N]
-    
-        elseif stage == T
-            children     = SDDP.Noise[]
-            noise_terms  = SDDP.Noise[]       # none in this model
-            return children, noise_terms
-    
-        else
-            
-            prob_row = P_prob[markov_state, :]      
-            children = [SDDP.Noise((stage + 1, s), p) for (s, p) in enumerate(prob_row)]
-            noise_terms = SDDP.Noise[]              # no stagewise-independent noise
-            return children, noise_terms
-        end
-    end
-
     sims_SP = SDDP.simulate(
         m,
-        N_sim;
-        sampling_scheme = sampling_scheme,
+        N_sim
     )
+    
     profits_SP = [sum(stage[:stage_objective] for stage in sim)
                     for sim in sims_SP]
     SP = mean(profits_SP)
 
     objs = Float64[]
     for _ in 1:N_sim
-        ζ_path = sample_chain(T, P_prob, ζ)
+        ζ_path = sample_chain(T, P_prob, ζ; initial_state = 1)
         prices_path = λ̄ .* exp.(ζ_path)
         det_model = deterministic_model(prices_path)
         optimize!(det_model)

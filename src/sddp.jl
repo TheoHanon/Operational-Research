@@ -2,19 +2,23 @@ using SDDP, Gurobi
 using Statistics
 
 
-function model_sddp(prices, states, P_prob)
+function model_sddp(prices, states, P_prob;
+    fix_ξ = nothing,
+    fix_η = nothing)
 
-    env = Gurobi.Env(output_flag = 0)
+    env = Gurobi.Env()
     N = length(states)
     T = length(prices)
 
     ub = 24 * 200 * maximum(prices)
 
+    root_transition = zeros(1, N)
+    root_transition[1] = 1.0
     # Transition matrices: same across stages, first stage fixed at state 1
     # transition_matrices = vcat([reshape(root_transition, 1, N)], fill(P_prob, T - 1))
     transition_matrices = Vector{Matrix{Float64}}(undef, T)
 
-    transition_matrices[1] = fill(1 / N, 1, N)
+    transition_matrices[1] = reshape(root_transition, 1, N)
     for t in 2:T
         transition_matrices[t] = P_prob
     end
@@ -37,9 +41,12 @@ function model_sddp(prices, states, P_prob)
         @variable(subproblem, 0 <= b <= 800, SDDP.State, initial_value = 0.0)
 
         @constraint(subproblem, b.out == b.in + ξ - η)
-        if stage == 1
-            @constraint(subproblem, b.out == 0)
+
+        if (fix_ξ !== nothing && stage <= length(fix_ξ)) && (fix_η !== nothing && stage <= length(fix_η))
+            @constraint(subproblem, ξ == fix_ξ[stage])
+            @constraint(subproblem, η == fix_η[stage])
         end
+
         @stageobjective(subproblem, λ_t * (0.9 * η - (1.0 / 0.9) * ξ))
     
     end
