@@ -43,7 +43,7 @@ function sample_chain(T::Int,
     return chain_states
 end
 
-function sample_chain_indices(T::Int,
+function sample_chain_idx(T::Int,
     P_prob::Matrix{Float64},
     states::Vector{Float64};
     initial_state = nothing)
@@ -51,6 +51,7 @@ function sample_chain_indices(T::Int,
     N = length(states)
     chain_idx    = Vector{Int}(undef, T)
     chain_states = Vector{Float64}(undef, T)
+    chain_prob   = Vector{Float64}(undef, T)
 
     # 1) uniform initial distribution over 1:N
     if initial_state !== nothing
@@ -64,9 +65,10 @@ function sample_chain_indices(T::Int,
     for t in 2:T
         w = P_prob[chain_idx[t-1], :]
         chain_idx[t]    = sample(1:N, Weights(w))
+        chain_prob[t] = w[chain_idx[t]]
         chain_states[t] = states[chain_idx[t]]
     end
 
-    return chain_idx
+    return (chain_states, chain_prob)
 end
 
