@@ -10,9 +10,9 @@ function generate_scenarios(H, N)
     return [vcat(p, [s]) for p in prev for s in 1:N]
 end
 
-# Build full trajectories (starting from known state 1 at t=1)
+
 function compute_price_path(H, scenario, λ_expected, markov_support, markov_transition)
-    full_states = [1; scenario]  # root state fixed at 1
+    full_states = [1; scenario]  
     λ_path = [λ_expected[t] * exp(markov_support[full_states[t]]) for t in 1:H]
     ζ_path = [full_states[t] for t in 1:H]
 
@@ -37,12 +37,12 @@ function extended_multistage(λ_paths, ζ_paths, probs, H, num_scenarios)
         b[t+1, ω] == b[t, ω] + ξ[t, ω] - η[t, ω])
 
     for t in 1:H
-        groups = Dict{NTuple{t,Int}, Vector{Int}}()   # key = (s₁,…,s_{t-1})
+        groups = Dict{NTuple{t,Int}, Vector{Int}}()  
         for ω in 1:num_scenarios
-            key = Tuple(ζ_paths[ω][1:t])        # **integers – exact**
+            key = Tuple(ζ_paths[ω][1:t])        
             push!( get!(groups, key, Int[]), ω )
         end
-        for Ω in values(groups)                         # one equality set per node
+        for Ω in values(groups)                        
             ref = Ω[1]
             for ω in Ω[2:end]
                 @constraint(model, η[t, ref] == η[t, ω])

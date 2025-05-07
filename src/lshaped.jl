@@ -80,7 +80,7 @@ function lshaped(prices_expected, prices_scenarios, prices_prob, θ_init)
     seenπ = Vector{Vector{Float64}}()
     sub_ret = nothing
 
-    # Create main model and variables
+    
     main_model, b1, η1, ξ1, θ = main_problem_lshaped(prices_expected, θ_init, F)
 
     for k in 1:MAXIMUM_ITERATIONS
@@ -92,7 +92,7 @@ function lshaped(prices_expected, prices_scenarios, prices_prob, θ_init)
 
         ub = objective_value(main_model)
 
-        # Extract first-stage solution
+    
         b1_k = value.(b1)
         eta1_k = value.(η1)
         xi1_k = value.(ξ1)
@@ -115,7 +115,7 @@ function lshaped(prices_expected, prices_scenarios, prices_prob, θ_init)
             break
         end
         push!(seenπ, πk)
-        # Build the expected cut
+        # Build the cut
         expr = 0.0
         for i in eachindex(prices_prob)
             expr += prices_prob[i] * (
@@ -150,7 +150,7 @@ function multicut_lshaped(prices_expected, prices_scenarios, prices_prob, θ_ini
     seenπ = [Vector{Float64}() for _ in eachindex(prices_scenarios)]
     sub_ret = nothing
 
-    # Create main model and variables
+
     main_model, b1, η1, ξ1, θ = main_problem_mc(prices_expected, prices_prob, θ_init, F)
 
     for k in 1:MAXIMUM_ITERATIONS
@@ -162,12 +162,12 @@ function multicut_lshaped(prices_expected, prices_scenarios, prices_prob, θ_ini
         end
 
         
-        # Extract first-stage solution
+        
         b1_k = value.(b1)
         eta1_k = value.(η1)
         xi1_k = value.(ξ1)
         
-        # Solve all subproblems
+        
         sub_ret = [
             solve_subproblem(b1_k, eta1_k, xi1_k, prices_scenarios[l], F) for l in eachindex(prices_scenarios)
         ]
@@ -179,7 +179,7 @@ function multicut_lshaped(prices_expected, prices_scenarios, prices_prob, θ_ini
         push!(LBs, lb)
         push!(UBs, ub)
 
-        # 1) detect which ω are new
+
         new_cut_for = falses(length(prices_scenarios))
         for ω in eachindex(prices_scenarios)
             if πk[ω] ∉ seenπ[ω]
@@ -188,12 +188,12 @@ function multicut_lshaped(prices_expected, prices_scenarios, prices_prob, θ_ini
             end
         end
 
-        # 2) if none of the ω produced a new π, we’re done
+
         if all(!flag for flag in new_cut_for)
             println("Terminating at iteration $(k) with the optimal solution")
             break   # now truly exits the for k loop
         end
-        # 3) otherwise add exactly those new cuts
+    
         for ω in eachindex(prices_scenarios)
             if new_cut_for[ω]
                 cut = @constraint(main_model,

@@ -25,7 +25,7 @@ function sample_chain(T::Int,
     chain_idx    = Vector{Int}(undef, T)
     chain_states = Vector{Float64}(undef, T)
 
-    # 1) uniform initial distribution over 1:N
+    
     if initial_state !== nothing
         chain_idx[1]    = initial_state
     else
@@ -33,7 +33,7 @@ function sample_chain(T::Int,
     end
     chain_states[1] = states[chain_idx[1]]
 
-    # 2) propagate
+    
     for t in 2:T
         w = P_prob[chain_idx[t-1], :]
         chain_idx[t]    = sample(1:N, Weights(w))
@@ -53,7 +53,7 @@ function sample_chain_idx(T::Int,
     chain_states = Vector{Float64}(undef, T)
     chain_prob   = Vector{Float64}(undef, T)
 
-    # 1) uniform initial distribution over 1:N
+    
     if initial_state !== nothing
         chain_idx[1]    = initial_state
     else
@@ -61,7 +61,7 @@ function sample_chain_idx(T::Int,
     end
     chain_states[1] = states[chain_idx[1]]
 
-    # 2) propagate
+    
     for t in 2:T
         w = P_prob[chain_idx[t-1], :]
         chain_idx[t]    = sample(1:N, Weights(w))
